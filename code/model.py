@@ -6,9 +6,9 @@ from torch.utils import checkpoint
 
 # Conv2D + LeakyReLu + BatchNorm2D
 class Conv(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size, padding):
+    def __init__(self, in_channels, out_channels, kernel_size, padding=0, stride=1):
         super(Conv, self).__init__()
-        conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride=1, padding=padding, padding_mode='reflect')
+        conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride=stride, padding=padding, padding_mode='reflect')
         leaky_relu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
         norm = nn.BatchNorm2d(out_channels, affine=True)
         self.block = nn.Sequential(conv, leaky_relu, norm)
@@ -103,4 +103,63 @@ class Transformer(nn.Module):
         noisy = noisy + self.feed_forward(noisy)
         return (noisy, x[1])
 
+class Denoiser(nn.Module):
+    def __init__(self, noisy_in_ch, aux_in_ch, num_xfmr, num_gcp):
+        self.noisy_msfe = MSFE(noisy_in_ch)
+        self.aux_msfe = MSFE(aux_in_ch)
 
+        xfmrs = []
+        for i in range(num_xfmr):
+            if i <= (num_sa - num_gcp):
+                xfmrs.append(TransformerBlock(ch=256, checkpoint=False))
+            else:
+                xfmrs.append(TransformerBlock(ch=256, checkpoint=True))
+        self.xfmrs = nn.Sequential(*xfmrs)
+
+        self.decoder = nn.Sequential(
+            Conv(in_channels=256, out_channels=256, kernel_size=3, padding=1),
+            Conv(in_channels=256, out_channels=256, kernel_size=3, padding=1),
+            Conv(in_channels=256, out_channels=3, kernel_size=3, padding=1),
+        )
+
+    def forward(self, noisy, aux):
+        f_n_0 = self.noisy_msfe(noisy)
+        f_a = self.aux_msfe(aux)
+        f_n_k = self.xfmrs([f_n_0, f_a])[0]
+        denoised = self.decoder(f_n_k) + noisy
+        return denoised
+        
+class DiscriminatorVGG128(nn.Module):
+    def __init__(self, in_ch, nf):
+        super(DiscriminatorVGG128, self).__init__()
+
+        self.features = nn.Sequential(
+            Conv(in_channels=in_ch, out_channels=nf * 1, kernel_size=3, padding=1, stride=1),
+            Conv(in_channels=nf * 1, out_channels=nf, kernel_size=4, padding=1, stride=2),
+
+            Conv(in_channels=nf * 1, out_channels=nf * 2, kernel_size=3, padding=1, stride=1),
+            Conv(in_channels=nf * 2, out_channels=nf * 2, kernel_size=4, padding=1, stride=2),
+
+            Conv(in_channels=nf * 2, out_channels=nf * 4, kernel_size=3, padding=1, stride=1),
+            Conv(in_channels=nf * 4, out_channels=nf * 4, kernel_size=4, padding=1, stride=2),
+
+            Conv(in_channels=nf * 4, out_channels=nf * 8, kernel_size=3, padding=1, stride=1),
+            Conv(in_channels=nf * 8, out_channels=nf * 8, kernel_size=4, padding=1, stride=2),
+
+            Conv(in_channels=nf * 8, out_channels=nf * 8, kernel_size=3, padding=1, stride=1),
+            Conv(in_channels=nf * 8, out_channels=nf * 8, kernel_size=4, padding=1, stride=2),
+        )
+
+        self.classifier = nn.Sequential(
+            nn.Linear(nf * 8 * 4 * 4, 100), 
+            nn.LeakyReLU(0.2, True), 
+            nn.Linear(100, 1)
+        )
+
+    def forward(self, x):
+        x = self.features(x)
+        x = x.reshape((x.size(0), -1))
+        x = self.classifier(x)
+        return x
+
+    
