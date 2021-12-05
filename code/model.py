@@ -110,10 +110,10 @@ class Denoiser(nn.Module):
 
         xfmrs = []
         for i in range(num_xfmr):
-            if i <= (num_sa - num_gcp):
-                xfmrs.append(TransformerBlock(ch=256, checkpoint=False))
+            if i <= (num_xfmr - num_gcp):
+                xfmrs.append(Transformer(ch=256, checkpoint=False))
             else:
-                xfmrs.append(TransformerBlock(ch=256, checkpoint=True))
+                xfmrs.append(Transformer(ch=256, checkpoint=True))
         self.xfmrs = nn.Sequential(*xfmrs)
 
         self.decoder = nn.Sequential(
