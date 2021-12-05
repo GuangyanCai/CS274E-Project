@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
-from torch.utils import checkpoint
+from torch.utils.checkpoint import checkpoint
 
 # Conv2D + LeakyReLu + BatchNorm2D
 class Conv(nn.Module):
@@ -29,7 +29,7 @@ class MSFE(nn.Module):
         return self.conv_concat(torch.cat([
             self.conv_1(x),
             self.conv_3(x),
-            self.conv_5(x)]), dim=1)
+            self.conv_5(x)], dim=1))
 
 # Auxiliary Feature Guided Self-attention
 class AFGSA(nn.Module):
@@ -49,8 +49,6 @@ class AFGSA(nn.Module):
         self.q_conv = nn.Conv2d(ch, ch, kernel_size=1, bias=bias)
         self.k_conv = nn.Conv2d(ch, ch, kernel_size=1, bias=bias)
         self.v_conv = nn.Conv2d(ch, ch, kernel_size=1, bias=bias)
-
-        self.reset_parameters()
 
     def forward(self, noisy, aux):
         n_aux = self.conv_map(torch.cat([noisy, aux], dim=1))
@@ -105,6 +103,8 @@ class Transformer(nn.Module):
 
 class Denoiser(nn.Module):
     def __init__(self, noisy_in_ch, aux_in_ch, num_xfmr, num_gcp):
+        super(Denoiser, self).__init__()
+
         self.noisy_msfe = MSFE(noisy_in_ch)
         self.aux_msfe = MSFE(aux_in_ch)
 
