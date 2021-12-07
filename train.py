@@ -1,5 +1,7 @@
 from dataset import KujialeDataset 
+from os import makedirs
 from os.path import join
+import torch
 from torch.utils.data import DataLoader
 from torch import optim
 from torchvision.transforms import RandomCrop
@@ -7,14 +9,18 @@ from model import Denoiser, DiscriminatorVGG128
 from config import config
 from torchgan.trainer import Trainer 
 from torchgan.losses import WassersteinGeneratorLoss, WassersteinDiscriminatorLoss
+import datetime
 
 def train():
     device = 'cuda'
     data = KujialeDataset(
-        join('..', 'data', 'KJL_features'), 
-        join('..', 'data', 'KJL_reference'),
+        join('data', 'KJL_features'), 
+        join('data', 'KJL_reference'),
         transform=RandomCrop(config['patch_size']))
-    dataloader = DataLoader(data, batch_size=config['batch_size'], shuffle=True)
+    data_loader = DataLoader(data, batch_size=config['batch_size'], shuffle=True)
+
+    dir_checkpoint = f'checkpoint/{datetime.datetime.now()}'
+    makedirs(dir_checkpoint, exist_ok="true")
 
     d = DiscriminatorVGG128(3, 64).to(device)
     d_optimizer = optim.Adam(d.parameters(), lr=config['d_lr'])
@@ -28,7 +34,7 @@ def train():
     g_loss_fn = WassersteinGeneratorLoss()
 
     for epoch in range(config['num_epoch']):
-        for noisy, aux, ref in dataloader:
+        for i, (noisy, aux, ref) in enumerate(data_loader):
             noisy = noisy.to(device)
             aux = aux.to(device)
             ref = ref.to(device)
@@ -51,7 +57,16 @@ def train():
             d_scheduler.step()
             g_scheduler.step()
 
-            print(f"\r[INFO] discriminator loss: {d_loss} | generator loss: {g_loss} ")
+            print(f"\r[INFO] epoch {epoch + 1} [{i + 1}/{len(data_loader)}]:  discriminator loss: {d_loss} | generator loss: {g_loss} ", end='')
+
+        torch.save({
+            'd_state_dict': d.state_dict(),
+            'd_optimizer_state_dict': d_optimizer.state_dict(),
+            'd_scheduler_state_dict': d_scheduler.state_dict(), 
+            'g_state_dict': g.state_dict(),
+            'g_optimizer_state_dict': g_optimizer.state_dict(),
+            'g_scheduler_state_dict': g_scheduler.state_dict(), 
+        }, join(dir_checkpoint, 'checkpoint.pt'))
 
 
 if __name__ == '__main__':
