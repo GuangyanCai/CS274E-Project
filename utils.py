@@ -30,3 +30,9 @@ def get_all_dirs(dir_path):
             dir_names.append(dir_name)
 
     return dir_names
+
+def preprocess_specular(specular):
+    return np.log(specular + 1.)
+
+def postprocess_specular(specular):
+    return np.exp(specular) - 1.

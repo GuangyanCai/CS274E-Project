@@ -7,7 +7,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
 
-from utils import load_exr_to_tensor, get_all_dirs
+from utils import load_exr_to_tensor, get_all_dirs, preprocess_specular
 
 # Kujiale Dataset
 class KujialeDataset(Dataset):
@@ -40,6 +40,8 @@ class KujialeDataset(Dataset):
             auxiliary_image = self.transform(auxiliary_image)
             ref_image = self.transform(ref_image)
             
+        noisy_image = preprocess_specular(noisy_image)
+        ref_image = preprocess_specular(ref_image)
         return noisy_image, auxiliary_image, ref_image
 
     def __len__(self):
