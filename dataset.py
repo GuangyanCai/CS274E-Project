@@ -3,6 +3,7 @@
 from os.path import join
 from cv2 import AlignExposures
 import numpy as np
+import random
 import torch
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
@@ -13,13 +14,27 @@ from utils import load_exr_to_tensor, get_all_dirs, preprocess_specular
 class KujialeDataset(Dataset):
     """ Kujiale Dataset """
 
-    def __init__(self, root_dir, ref_dir, transform=None):
+    def __init__(self, root_dir, ref_dir, transform=None, phase="train"):
         self.root_dir = root_dir
         self.ref_dir = ref_dir
         self.transform = transform
         self.id_list = get_all_dirs(root_dir)
+        self.phase = phase
+        self.id_list.sort()
+        random.seed(13)
+        random.shuffle(self.id_list)
+
+        dataset_size = len(self.id_list)
+        self.train_set_size = int(dataset_size * 0.8)
+        self.val_set_size = int(dataset_size * 0.1)
+        self.test_set_size = dataset_size - self.train_set_size - self.val_set_size
 
     def __getitem__(self, index):
+        if self.phase == "validate":
+            index = index + self.train_set_size
+        elif self.phase == "test":
+            index = index + self.train_set_size + self.val_set_size
+
         image_id = self.id_list[index]
         noisy_image_path = join(self.root_dir, image_id, "color.exr")
         normal_image_path = join(self.root_dir, image_id, "normal.exr")
@@ -45,4 +60,9 @@ class KujialeDataset(Dataset):
         return noisy_image, auxiliary_image, ref_image
 
     def __len__(self):
-        return len(self.id_list)
+        if self.phase == "train":
+            return self.train_set_size
+        elif self.phase == "validate":
+            return self.val_set_size
+        else:
+            return self.test_set_size
