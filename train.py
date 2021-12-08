@@ -1,5 +1,6 @@
 from torchgan.losses.wasserstein import WassersteinGradientPenalty
 from dataset import KujialeDataset 
+from utils import postprocess_specular, write_tensor_to_exr
 from os import makedirs
 from os.path import join
 import torch
@@ -16,14 +17,25 @@ import numpy as np
 
 def train():
     device = 'cuda'
-    data = KujialeDataset(
+    train_data = KujialeDataset(
         join('data', 'KJL_features'), 
         join('data', 'KJL_reference'),
-        transform=RandomCrop(config['patch_size']))
-    data_loader = DataLoader(data, batch_size=config['batch_size'], shuffle=True)
+        transform=RandomCrop(config['patch_size']),
+        phase='train')
+    train_data_loader = DataLoader(train_data, batch_size=config['batch_size'], shuffle=True)
 
-    dir_checkpoint = f'checkpoint/{datetime.datetime.now()}'
+    validate_data = KujialeDataset(
+        join('data', 'KJL_features'), 
+        join('data', 'KJL_reference'),
+        transform=None,
+        phase='validate')
+    validate_data_loader = DataLoader(validate_data, batch_size=config['validate_batch_size'], shuffle=False)
+
+    curr_time = datetime.datetime.now()
+    dir_checkpoint = f'checkpoint/{curr_time}'
+    dir_validation = f'validation/{curr_time}'
     makedirs(dir_checkpoint, exist_ok="true")
+    makedirs(dir_validation, exist_ok="true")
 
     d = DiscriminatorVGG128(3, 64).to(device)
     d_optimizer = optim.Adam(d.parameters(), lr=config['d_lr'])
@@ -45,7 +57,7 @@ def train():
         d_loss_sum = 0.0
         g_loss_sum = 0.0
 
-        for i, (noisy, aux, ref) in enumerate(data_loader):
+        for i, (noisy, aux, ref) in enumerate(train_data_loader):
             batch_size = noisy.shape[0]
 
             noisy = noisy.to(device)
@@ -61,14 +73,14 @@ def train():
             interpolate = epsilon * denoised.detach() + (1.0 - epsilon) * ref
             interpolate.requires_grad = True
             d_interpolate = d(interpolate)
-            d_loss = d_loss_fn(d_real, d_fake) + d_loss_p_fn(interpolate, d_interpolate)
+            d_loss = d_loss_fn(d_real, d_fake) + config['d_loss_p_w'] * d_loss_p_fn(interpolate, d_interpolate)
             d_loss.backward()
             d_optimizer.step()
             
 
             g_optimizer.zero_grad()
             d_fake = d(denoised)
-            g_loss = g_loss_fn(d_fake) + g_l1_loss_fn(denoised, ref)
+            g_loss = config['g_loss_w'] * g_loss_fn(d_fake) + config['g_l1_loss_w'] * g_l1_loss_fn(denoised, ref)
             g_loss.backward()
             g_optimizer.step()
             
@@ -80,7 +92,8 @@ def train():
             d_loss_record.append(d_loss_sum / (i + 1))
             g_loss_record.append(g_loss_sum / (i + 1))
 
-            print(f"\r[INFO] epoch {epoch + 1} [{i + 1}/{len(data_loader)}]:  discriminator loss: {d_loss_record[-1]} | generator loss: {g_loss_record[-1]} ", end='')
+            print(f"\r[INFO] epoch {epoch + 1} minibatch [{i + 1}/{len(train_data_loader)}]:  discriminator loss: {d_loss_record[-1]} | generator loss: {g_loss_record[-1]} ", end='')
+        print()
 
         torch.save({
             'd_state_dict': d.state_dict(),
@@ -92,6 +105,30 @@ def train():
             'g_scheduler_state_dict': g_scheduler.state_dict(), 
             'g_loss_record': g_loss_record, 
         }, join(dir_checkpoint, 'checkpoint.pt'))
+
+        dir_validation_epoch = join(dir_validation, str(epoch))
+        makedirs(dir_validation_epoch)
+
+        g.eval()
+        with torch.no_grad():
+            counter = 0
+            for noisy, aux, ref in validate_data_loader:
+                if counter >= config['validate_max_num']: break
+
+                noisy = noisy.to(device)
+                aux = aux.to(device)
+
+                denoised = g(noisy, aux)
+
+                for d_img, r_img in zip(denoised, ref):
+                    print(f"\r[INFO] Genereateing validation results [{counter + 1}/{config['validate_max_num']}]", end='')
+                    d_img_path = join(dir_validation_epoch, f'{counter}_denoised.exr')
+                    r_img_path = join(dir_validation_epoch, f'{counter}_reference.exr')
+                    write_tensor_to_exr(d_img_path, d_img, postprocess=True)
+                    write_tensor_to_exr(r_img_path, r_img, postprocess=True)
+                    counter += 1
+            print()
+        g.train()
 
 
 if __name__ == '__main__':

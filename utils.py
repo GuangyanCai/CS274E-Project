@@ -23,6 +23,12 @@ def load_exr_to_tensor(path):
     tensor = torch.from_numpy(matrix).float().permute(2, 0, 1)
     return tensor
 
+def write_tensor_to_exr(path, tensor, postprocess=False):
+    if postprocess:
+        tensor = postprocess_specular(tensor)
+    matrix = tensor.permute(1, 2, 0).detach().cpu().numpy()
+    write_matrix_to_exr(path, matrix)
+
 def get_all_dirs(dir_path):
     dir_names = []
     for dir_name in listdir(dir_path):
@@ -32,7 +38,13 @@ def get_all_dirs(dir_path):
     return dir_names
 
 def preprocess_specular(specular):
-    return np.log(specular + 1.)
+    return torch.log(specular + 1.)
+
+def preprocess_normal(normal):
+    normal = torch.nan_to_num(normal)
+    normal = (normal + 1.0) * 0.5
+    normal = torch.clamp(normal, min=0.0, max=1.0)
+    return normal
 
 def postprocess_specular(specular):
-    return np.exp(specular) - 1.
+    return torch.exp(specular) - 1.

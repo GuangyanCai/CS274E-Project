@@ -5,10 +5,11 @@ from cv2 import AlignExposures
 import numpy as np
 import random
 import torch
+from torch.functional import norm
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
 
-from utils import load_exr_to_tensor, get_all_dirs, preprocess_specular
+from utils import load_exr_to_tensor, get_all_dirs, preprocess_normal, preprocess_specular
 
 # Kujiale Dataset
 class KujialeDataset(Dataset):
@@ -47,6 +48,10 @@ class KujialeDataset(Dataset):
         depth_image = load_exr_to_tensor(depth_image_path)
         albedo_image = load_exr_to_tensor(albedo_image_path)
         ref_image = load_exr_to_tensor(ref_image_path)
+
+        noisy_image = preprocess_specular(noisy_image)
+        ref_image = preprocess_specular(ref_image)
+        normal_image = preprocess_normal(normal_image)
         
         auxiliary_image = torch.cat([albedo_image, normal_image, depth_image[0:1, :, :]], dim=0)
 
@@ -55,8 +60,6 @@ class KujialeDataset(Dataset):
             auxiliary_image = self.transform(auxiliary_image)
             ref_image = self.transform(ref_image)
             
-        noisy_image = preprocess_specular(noisy_image)
-        ref_image = preprocess_specular(ref_image)
         return noisy_image, auxiliary_image, ref_image
 
     def __len__(self):

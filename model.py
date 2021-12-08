@@ -4,14 +4,14 @@ import torch.nn.functional as F
 from einops import rearrange
 from torch.utils.checkpoint import checkpoint
 
-# Conv2D + LeakyReLu + BatchNorm2D
+# Conv2D + BatchNorm2D + LeakyReLu
 class Conv(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, padding=0, stride=1):
         super(Conv, self).__init__()
         conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride=stride, padding=padding, padding_mode='reflect')
-        leaky_relu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
         norm = nn.BatchNorm2d(out_channels, affine=True)
-        self.block = nn.Sequential(conv, leaky_relu, norm)
+        leaky_relu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
+        self.block = nn.Sequential(conv, norm, leaky_relu)
 
     def forward(self, x):
         return self.block(x)
@@ -94,7 +94,7 @@ class Transformer(nn.Module):
         )
 
     def forward(self, x):
-        if self.checkpoint:
+        if self.checkpoint and self.training:
             noisy = x[0] + checkpoint(self.attention, x[0], x[1])
         else:
             noisy = x[0] + self.attention(x[0], x[1])

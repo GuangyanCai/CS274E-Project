@@ -1,10 +1,15 @@
 config = dict(
     patch_size = 128,
-    batch_size = 8,
-    num_epoch = 10,
+    batch_size = 6,    
+    num_epoch = 50,
     num_xfmr = 5,
     num_gcp = 2,
     g_lr = 1e-4,
     d_lr = 1e-4,
-    milestones = [5],
+    g_loss_w = 5e-3,
+    g_l1_loss_w = 1e1,
+    d_loss_p_w = 1e2,
+    milestones = [10, 20, 30, 40],
+    validate_batch_size = 1,
+    validate_max_num = 10,
 )
