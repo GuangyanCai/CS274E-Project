@@ -9,7 +9,7 @@ from torch import optim
 from torchvision.transforms import RandomCrop
 from model import Denoiser, DiscriminatorVGG128
 from config import config
-from torchgan.trainer import Trainer 
+from torchgan.models import DCGANDiscriminator
 from torchgan.losses import WassersteinGeneratorLoss, WassersteinDiscriminatorLoss, WassersteinGradientPenalty
 from torch.nn import L1Loss
 import datetime
@@ -37,7 +37,8 @@ def train():
     makedirs(dir_checkpoint, exist_ok="true")
     makedirs(dir_validation, exist_ok="true")
 
-    d = DiscriminatorVGG128(3, 64).to(device)
+    # d = DiscriminatorVGG128(3, 64).to(device)
+    d = DCGANDiscriminator(in_size=config['patch_size'], in_channels=3).to(device)
     d_optimizer = optim.Adam(d.parameters(), lr=config['d_lr'])
     d_scheduler = optim.lr_scheduler.MultiStepLR(d_optimizer, milestones=config['milestones'])
 

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
-from torch.nn.modules.activation import Sigmoid
+from torch.nn.modules.activation import ReLU, Sigmoid
 from torch.utils.checkpoint import checkpoint
 
 # Conv2D + BatchNorm2D + LeakyReLu
