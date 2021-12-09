@@ -56,8 +56,11 @@ class KujialeDataset(Dataset):
         auxiliary_image = torch.cat([albedo_image, normal_image, depth_image[0:1, :, :]], dim=0)
 
         if self.transform:
+            state = torch.get_rng_state()
             noisy_image = self.transform(noisy_image)
+            torch.set_rng_state(state)
             auxiliary_image = self.transform(auxiliary_image)
+            torch.set_rng_state(state)
             ref_image = self.transform(ref_image)
             
         return noisy_image, auxiliary_image, ref_image
