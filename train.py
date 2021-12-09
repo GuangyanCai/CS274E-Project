@@ -57,6 +57,9 @@ def train():
         d_loss_sum = 0.0
         g_loss_sum = 0.0
 
+        fake_acc = 0
+        real_acc = 0
+
         for i, (noisy, aux, ref) in enumerate(train_data_loader):
             batch_size = noisy.shape[0]
 
@@ -76,8 +79,10 @@ def train():
             d_loss = d_loss_fn(d_real, d_fake) + config['d_loss_p_w'] * d_loss_p_fn(interpolate, d_interpolate)
             d_loss.backward()
             d_optimizer.step()
-            
 
+            real_acc += torch.round(d_real).bool().sum().item()
+            fake_acc += (1 - torch.round(d_fake)).bool().sum().item()
+            
             g_optimizer.zero_grad()
             d_fake = d(denoised)
             g_loss = config['g_loss_w'] * g_loss_fn(d_fake) + config['g_l1_loss_w'] * g_l1_loss_fn(denoised, ref)
@@ -92,8 +97,11 @@ def train():
             d_loss_record.append(d_loss_sum / (i + 1))
             g_loss_record.append(g_loss_sum / (i + 1))
 
-            print(f"\r[INFO] epoch {epoch + 1} minibatch [{i + 1}/{len(train_data_loader)}]:  discriminator loss: {d_loss_record[-1]} | generator loss: {g_loss_record[-1]} ", end='')
-        print()
+            print(f"\r[INFO] epoch {epoch + 1} minibatch [{i + 1}/{len(train_data_loader)}]: discriminator loss: {d_loss_record[-1]} | generator loss: {g_loss_record[-1]}", end='')
+
+        fake_acc /= float(len(train_data))
+        real_acc /= float(len(train_data))
+        print(f'\n[INFO] discriminator accuracy: {fake_acc} (fake) {real_acc} (real)')
 
         torch.save({
             'd_state_dict': d.state_dict(),
@@ -120,10 +128,12 @@ def train():
 
                 denoised = g(noisy, aux)
 
-                for d_img, r_img in zip(denoised, ref):
+                for n_img, d_img, r_img in zip(noisy, denoised, ref):
                     print(f"\r[INFO] Genereateing validation results [{counter + 1}/{config['validate_max_num']}]", end='')
+                    n_img_path = join(dir_validation_epoch, f'{counter}_noisy.exr')
                     d_img_path = join(dir_validation_epoch, f'{counter}_denoised.exr')
                     r_img_path = join(dir_validation_epoch, f'{counter}_reference.exr')
+                    write_tensor_to_exr(n_img_path, n_img, postprocess=True)
                     write_tensor_to_exr(d_img_path, d_img, postprocess=True)
                     write_tensor_to_exr(r_img_path, r_img, postprocess=True)
                     counter += 1

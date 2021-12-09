@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
+from torch.nn.modules.activation import Sigmoid
 from torch.utils.checkpoint import checkpoint
 
 # Conv2D + BatchNorm2D + LeakyReLu
@@ -153,7 +154,8 @@ class DiscriminatorVGG128(nn.Module):
         self.classifier = nn.Sequential(
             nn.Linear(nf * 8 * 4 * 4, 100), 
             nn.LeakyReLU(0.2, True), 
-            nn.Linear(100, 1)
+            nn.Linear(100, 1),
+            nn.Sigmoid()
         )
 
     def forward(self, x):
